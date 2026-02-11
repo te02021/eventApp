@@ -1,114 +1,90 @@
 "use client";
 
-import React from "react";
-
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import LogoutButton from "@/components/LogoutButton";
 import {
   Camera,
   Edit3,
-  LogOut,
   User,
   Mail,
   Calendar,
   Check,
   X,
   Loader2,
-  ChevronRight,
-  Bell,
-  Shield,
-  HelpCircle,
 } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarImage } from "@/components/ui/avatar";
+import type { Session } from "next-auth";
+import { updateUser } from "@/actions/profile-actions";
+import { useSession } from "next-auth/react";
 
 interface ProfileViewProps {
-  user: {
-    id: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    age: number;
-    avatar: string;
-  };
-  onUpdateUser: (user: {
-    id: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    age: number;
-    avatar: string;
-  }) => void;
-  onLogout: () => void;
+  user: Session["user"];
 }
 
-export function ProfileView({
-  user,
-  onUpdateUser,
-  onLogout,
-}: ProfileViewProps) {
+type User = Session["user"] & {
+  firstName?: string;
+  lastName?: string;
+  age?: number;
+};
+
+export function ProfileView({ user }: ProfileViewProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Edit form state
-  const [editFirstName, setEditFirstName] = useState(user.firstName);
-  const [editLastName, setEditLastName] = useState(user.lastName);
-  const [editAge, setEditAge] = useState(user.age.toString());
-  const [editAvatar, setEditAvatar] = useState(user.avatar);
+  const [editFirstName, setEditFirstName] = useState(user.firstName || "");
+  const [editLastName, setEditLastName] = useState(user.lastName || "");
+  const [editAge, setEditAge] = useState(user.age?.toString() || "");
+  const [editAvatar, setEditAvatar] = useState(user.image || "");
+  const [fileToUpload, setFileToUpload] = useState<File | null>(null);
 
-  const initials =
-    `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase();
-
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setEditAvatar(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+  const { update } = useSession();
 
   const handleSave = async () => {
     setIsSaving(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    const formData = new FormData();
+    formData.append("firstName", editFirstName || user.firstName || "");
+    formData.append("lastName", editLastName || user.lastName || "");
+    formData.append("age", String(editAge || user.age || ""));
+    if (fileToUpload) {
+      formData.append("image", fileToUpload);
+    }
+    const result = await updateUser(formData);
 
-    onUpdateUser({
-      ...user,
-      firstName: editFirstName,
-      lastName: editLastName,
-      age: parseInt(editAge) || user.age,
-      avatar: editAvatar,
-    });
+    if (result.success) {
+      const serverImageUrl = result.userImageUrl || user.image;
+
+      await update({
+        user: {
+          firstName: editFirstName,
+          lastName: editLastName,
+          age: Number(editAge),
+          image: serverImageUrl,
+        },
+      });
+
+      if (serverImageUrl) {
+        setEditAvatar(serverImageUrl);
+      }
+      setIsEditing(false);
+    } else {
+      console.error(result.error);
+    }
 
     setIsSaving(false);
-    setIsEditing(false);
   };
 
   const handleCancel = () => {
-    setEditFirstName(user.firstName);
-    setEditLastName(user.lastName);
-    setEditAge(user.age.toString());
-    setEditAvatar(user.avatar);
+    setEditFirstName(user.firstName || "");
+    setEditLastName(user.lastName || "");
+    setEditAge(user.age?.toString() || "");
+    setEditAvatar(user.image || "");
     setIsEditing(false);
-  };
-
-  const handleLogout = () => {
-    setShowLogoutConfirm(false);
-    onLogout();
   };
 
   return (
@@ -158,35 +134,49 @@ export function ProfileView({
           <div className="relative">
             <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
               <AvatarImage
-                src={isEditing ? editAvatar : user.avatar}
-                alt={`${user.firstName} ${user.lastName}`}
+                src={
+                  editAvatar ||
+                  (fileToUpload
+                    ? URL.createObjectURL(fileToUpload)
+                    : `https://ui-avatars.com/api/?name=${editFirstName}+${editLastName}`)
+                }
+                alt={`${editFirstName}+${editLastName}`}
               />
-              <AvatarFallback className="text-2xl font-semibold bg-primary text-primary-foreground">
-                {initials}
-              </AvatarFallback>
             </Avatar>
             {isEditing && (
               <>
                 <input
-                  ref={fileInputRef}
                   type="file"
-                  accept="image/*"
                   className="hidden"
-                  onChange={handleAvatarChange}
+                  accept="image/*"
+                  ref={fileInputRef}
+                  onChange={(e) => {
+                    setFileToUpload(e.target.files?.[0] || null);
+                  }}
                 />
                 <button
-                  onClick={() => fileInputRef.current?.click()}
+                  type="button"
+                  onClick={() => fileInputRef?.current?.click()}
                   className="absolute bottom-0 right-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center shadow-md hover:bg-primary/90 transition-colors"
                 >
                   <Camera className="h-4 w-4" />
                 </button>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  ref={fileInputRef}
+                  onChange={(e) => {
+                    setFileToUpload(e.target.files?.[0] || null);
+                  }}
+                />
               </>
             )}
           </div>
           {!isEditing && (
             <>
               <h2 className="text-xl font-semibold mt-4 text-foreground">
-                {user.firstName} {user.lastName}
+                {editFirstName} {editLastName}
               </h2>
               <p className="text-muted-foreground text-sm">{user.email}</p>
             </>
@@ -275,7 +265,7 @@ export function ProfileView({
                       Nombre completo
                     </p>
                     <p className="font-medium text-foreground">
-                      {user.firstName} {user.lastName}
+                      {editFirstName} {editLastName}
                     </p>
                   </div>
                 </div>
@@ -297,7 +287,7 @@ export function ProfileView({
                   <div className="flex-1">
                     <p className="text-xs text-muted-foreground">Edad</p>
                     <p className="font-medium text-foreground">
-                      {user.age} años
+                      {editAge} años
                     </p>
                   </div>
                 </div>
@@ -354,14 +344,7 @@ export function ProfileView({
             </Card> */}
 
             {/* Logout Button */}
-            <Button
-              variant="outline"
-              className="w-full h-12 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive bg-transparent"
-              onClick={() => setShowLogoutConfirm(true)}
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Cerrar Sesión
-            </Button>
+            <LogoutButton />
 
             {/* App Version */}
             <p className="text-center text-xs text-muted-foreground mt-6 pb-4">
@@ -370,35 +353,6 @@ export function ProfileView({
           </>
         )}
       </div>
-
-      {/* Logout Confirmation Dialog */}
-      <Dialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
-        <DialogContent className="max-w-xs mx-auto rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-center">¿Cerrar sesión?</DialogTitle>
-          </DialogHeader>
-          <p className="text-center text-muted-foreground text-sm">
-            Tendrás que volver a iniciar sesión para acceder a tus eventos y
-            rutinas.
-          </p>
-          <DialogFooter className="flex gap-2 mt-4">
-            <Button
-              variant="outline"
-              className="flex-1 bg-transparent"
-              onClick={() => setShowLogoutConfirm(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              className="flex-1"
-              onClick={handleLogout}
-            >
-              Cerrar Sesión
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

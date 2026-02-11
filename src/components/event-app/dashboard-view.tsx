@@ -10,13 +10,19 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { NotificationsBtn } from "@/components/event-app/notifications-btn";
 
+import { CreationModal } from "@/components/event-app/creation-modal";
+import { Plus } from "lucide-react"; // O el SVG que tenías
+import type { Session } from "next-auth";
+
 interface DashboardViewProps {
-  userName?: string;
+  user: Session["user"];
 }
 
 type TabValue = "activos" | "pendientes" | "historial";
 
-export function DashboardView({ userName = "Usuario" }: DashboardViewProps) {
+export default function DashboardView({ user }: DashboardViewProps) {
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
   const [activeTab, setActiveTab] = useState<TabValue>("activos");
   const [medicationChecked, setMedicationChecked] = useState(false);
 
@@ -29,16 +35,19 @@ export function DashboardView({ userName = "Usuario" }: DashboardViewProps) {
             <Link href="/profile">
               <Avatar className="h-10 w-10 cursor-pointer hover:opacity-80 transition-opacity">
                 <AvatarImage
-                  src="https://api.dicebear.com/7.x/avataaars/svg?seed=user1"
+                  src={
+                    user.image ||
+                    "https://api.dicebear.com/7.x/avataaars/svg?seed=user1"
+                  }
                   alt="Usuario"
                 />
-                <AvatarFallback>{userName[0]}</AvatarFallback>
+                <AvatarFallback>{user.image}</AvatarFallback>
               </Avatar>
             </Link>
             <div>
               <p className="text-sm text-muted-foreground">Bienvenido</p>
               <h1 className="text-lg font-semibold text-foreground">
-                Hola, {userName}
+                Hola, {user.firstName}
               </h1>
             </div>
           </div>
@@ -95,7 +104,7 @@ export function DashboardView({ userName = "Usuario" }: DashboardViewProps) {
               <Card className="relative overflow-hidden cursor-pointer hover:shadow-md active:scale-[0.98] transition-all">
                 <div className="relative h-48">
                   <img
-                    src="/images/trip-south.jpg"
+                    src="/images/cover/trip-south.jpg"
                     alt="Vacaciones en Cancún"
                     className="absolute inset-0 w-full h-full object-cover"
                     onError={(e) => {
@@ -292,6 +301,17 @@ export function DashboardView({ userName = "Usuario" }: DashboardViewProps) {
           </div>
         )}
       </div>
+      {/* 2. El Botón Flotante (FAB) */}
+      <button
+        onClick={() => setShowCreateModal(true)}
+        className="fixed bottom-24 right-4 lg:absolute lg:bottom-24 lg:right-4 w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-lg flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all z-20"
+        aria-label="Crear nuevo evento"
+      >
+        <Plus className="h-6 w-6" />
+      </button>
+
+      {/* 3. El Modal de Creación */}
+      <CreationModal open={showCreateModal} onOpenChange={setShowCreateModal} />
     </div>
   );
 }

@@ -22,6 +22,7 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "event",
   "system",
 ]);
+export const eventTypeEnum = pgEnum("event_type", ["event", "routine"]);
 
 // =========================================================
 // 1. AUTENTICACIÓN (Auth.js + Datos de Usuario)
@@ -102,11 +103,12 @@ export const verificationTokens = pgTable(
 
 export const events = pgTable("event", {
   id: uuid("id").defaultRandom().primaryKey(),
+  type: eventTypeEnum("type").notNull().default("event"),
   title: text("title").notNull(),
   description: text("description"),
   location: text("location"),
   startDate: timestamp("start_date", { mode: "date" }).notNull(),
-  endDate: timestamp("end_date", { mode: "date" }).notNull(),
+  endDate: timestamp("end_date", { mode: "date" }),
   coverImage: text("cover_image"),
 
   // Creador del evento (Owner)

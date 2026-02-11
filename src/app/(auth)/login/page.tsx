@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,35 +12,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { login } from "@/actions/auth-actions";
 
 export default function LoginPage() {
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") || "/";
+  const [formState, setFormState] = useActionState(login, null);
+
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
-
-  // Form States
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setIsLoading(true);
-
-    // Simulación de API (Aquí conectarás tu Server Action luego)
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    if (!email || !password) {
-      setError("Por favor completa todos los campos");
-      setIsLoading(false);
-      return;
-    }
-
-    // Aquí iría la redirección exitosa
-    console.log("Login exitoso con:", { email });
-    setIsLoading(false);
-    // router.push("/")
-  };
 
   return (
     <>
@@ -54,15 +35,15 @@ export default function LoginPage() {
       </CardHeader>
 
       <CardContent>
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form action={setFormState} className="space-y-4">
+          <input type="hidden" name="redirectTo" value={callbackUrl} />
           <div className="space-y-2">
             <Label htmlFor="email">Correo electrónico</Label>
             <Input
               id="email"
+              name="email"
               type="email"
-              placeholder="tu@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              placeholder="correo@email.com"
               className="h-12"
               disabled={isLoading}
             />
@@ -73,10 +54,9 @@ export default function LoginPage() {
             <div className="relative">
               <Input
                 id="password"
+                name="password"
                 type={showPassword ? "text" : "password"}
                 placeholder="Tu contraseña"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
                 className="h-12 pr-10"
                 disabled={isLoading}
               />
@@ -94,9 +74,9 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {error && (
+          {formState?.error && (
             <p className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-lg">
-              {error}
+              {formState.error}
             </p>
           )}
 

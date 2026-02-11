@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,47 +12,83 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { register } from "@/actions/auth-actions";
+import { useRouter } from "next/navigation";
 
 export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
-  // Form States
-  const [email, setEmail] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [age, setAge] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    age: "",
+    password: "",
+    confirmPassword: "",
+  });
 
-  const handleRegister = async (e: React.FormEvent) => {
+  const router = useRouter();
+
+  const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setError("");
     setIsLoading(true);
 
     // Validaciones básicas
-    if (!email || !password || !firstName || !lastName || !age) {
+    if (
+      !formData.email ||
+      !formData.password ||
+      !formData.firstName ||
+      !formData.lastName ||
+      !formData.age
+    ) {
       setError("Por favor completa todos los campos");
       setIsLoading(false);
       return;
     }
-    if (password !== confirmPassword) {
+    if (formData.password !== formData.confirmPassword) {
       setError("Las contraseñas no coinciden");
       setIsLoading(false);
       return;
     }
-    if (password.length < 6) {
+    if (formData.password.length < 6) {
       setError("La contraseña debe tener al menos 6 caracteres");
       setIsLoading(false);
       return;
     }
 
     // Simulación de API
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const result = await register({
+      name: formData.firstName,
+      email: formData.email,
+      lastName: formData.lastName,
+      age: Number(formData.age),
+      password: formData.password,
+    });
+    if (result.error) {
+      setError(String(result.error) || "Ocurrio un error");
+      return;
+    }
+    if (result.success) {
+      alert("Usuario registrado");
+      setFormData({
+        firstName: "",
+        lastName: "",
+        email: "",
+        password: "",
+        confirmPassword: "",
+        age: "",
+      });
+      setIsLoading(false);
 
-    console.log("Registro exitoso");
-    setIsLoading(false);
+      router.push("/login");
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log(`${e.target.name}: ${e.target.value}`);
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   return (
@@ -73,10 +109,12 @@ export default function RegisterPage() {
               <Label htmlFor="firstName">Nombre</Label>
               <Input
                 id="firstName"
-                placeholder="Juan"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
+                name="firstName"
+                placeholder="Tu nombre aqui"
+                value={formData.firstName}
+                onChange={handleChange}
                 className="h-11"
+                required
                 disabled={isLoading}
               />
             </div>
@@ -84,10 +122,12 @@ export default function RegisterPage() {
               <Label htmlFor="lastName">Apellido</Label>
               <Input
                 id="lastName"
-                placeholder="García"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
+                name="lastName"
+                placeholder="Tu apellido aqui"
+                value={formData.lastName}
+                onChange={handleChange}
                 className="h-11"
+                required
                 disabled={isLoading}
               />
             </div>
@@ -97,13 +137,15 @@ export default function RegisterPage() {
             <Label htmlFor="age">Edad</Label>
             <Input
               id="age"
+              name="age"
               type="number"
-              placeholder="28"
+              placeholder="Tu edad aqui"
               min="13"
               max="120"
-              value={age}
-              onChange={(e) => setAge(e.target.value)}
+              value={formData.age}
+              onChange={handleChange}
               className="h-11"
+              required
               disabled={isLoading}
             />
           </div>
@@ -112,11 +154,13 @@ export default function RegisterPage() {
             <Label htmlFor="email">Correo electrónico</Label>
             <Input
               id="email"
+              name="email"
               type="email"
               placeholder="tu@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={formData.email}
+              onChange={handleChange}
               className="h-11"
+              required
               disabled={isLoading}
             />
           </div>
@@ -126,11 +170,13 @@ export default function RegisterPage() {
             <div className="relative">
               <Input
                 id="password"
+                name="password"
                 type={showPassword ? "text" : "password"}
                 placeholder="Mínimo 6 caracteres"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                value={formData.password}
+                onChange={handleChange}
                 className="h-11 pr-10"
+                required
                 disabled={isLoading}
               />
               <button
@@ -151,10 +197,12 @@ export default function RegisterPage() {
             <Label htmlFor="confirm-password">Confirmar contraseña</Label>
             <Input
               id="confirm-password"
+              name="confirmPassword"
               type={showPassword ? "text" : "password"}
               placeholder="Repite tu contraseña"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              required
               className="h-11"
               disabled={isLoading}
             />
