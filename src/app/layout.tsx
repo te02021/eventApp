@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import SessionWrapper from "@/components/session-wrapper";
+import { Toaster } from "@/components/ui/sonner";
 
 const _inter = Inter({ subsets: ["latin"] });
 
@@ -49,6 +50,7 @@ export default function RootLayout({
       <body className={`font-sans antialiased`}>
         <SessionWrapper>{children}</SessionWrapper>
         <Analytics />
+        <Toaster />
       </body>
     </html>
   );

@@ -109,7 +109,7 @@ export const events = pgTable("event", {
   location: text("location"),
   startDate: timestamp("start_date", { mode: "date" }).notNull(),
   endDate: timestamp("end_date", { mode: "date" }),
-  coverImage: text("cover_image"),
+  color: text("color").notNull().default("#3b82f6"),
 
   // Creador del evento (Owner)
   createdById: text("created_by_id")
@@ -118,6 +118,24 @@ export const events = pgTable("event", {
 
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
+});
+
+// Tabla para registrar cuándo se completa una rutina
+export const routineCompletions = pgTable("routine_completion", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  // Qué rutina se completó
+  routineId: uuid("routine_id")
+    .notNull()
+    .references(() => events.id, { onDelete: "cascade" }),
+
+  // Quién la completó
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+
+  // Cuándo (Importante para saber si fue hoy o ayer)
+  completedAt: timestamp("completed_at").defaultNow().notNull(),
 });
 
 // Tabla intermedia: Usuarios <-> Eventos (Muchos a Muchos con Rol)
@@ -252,6 +270,7 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
   checklistItems: many(checklistItems),
   checklistCategories: many(checklistCategories),
   memories: many(memories),
+  completions: many(routineCompletions),
 }));
 
 export const collaboratorsRelations = relations(collaborators, ({ one }) => ({
@@ -308,6 +327,20 @@ export const memoryReactionsRelations = relations(
     }),
     user: one(users, {
       fields: [memoryReactions.userId],
+      references: [users.id],
+    }),
+  }),
+);
+
+export const routineCompletionsRelations = relations(
+  routineCompletions,
+  ({ one }) => ({
+    routine: one(events, {
+      fields: [routineCompletions.routineId],
+      references: [events.id],
+    }),
+    user: one(users, {
+      fields: [routineCompletions.userId],
       references: [users.id],
     }),
   }),

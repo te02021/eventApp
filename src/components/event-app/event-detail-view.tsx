@@ -1,119 +1,195 @@
 "use client";
-import Image from "next/image";
-import { ArrowLeft, MapPin, CloudRain, AlertTriangle } from "lucide-react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation"; // Para el botón volver
+import {
+  ArrowLeft,
+  MapPin,
+  CloudRain,
+  AlertTriangle,
+  Calendar as CalendarIcon,
+  Settings,
+} from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { ChecklistTab } from "./checklist-tab";
 import { MemoriesTab } from "./memories-tab";
 import { TeamTab } from "./team-tab";
 
+// Importamos los tipos
+import type { EventWithDetails } from "@/lib/data";
+import type { User } from "next-auth";
+import { EditEventDialog } from "./edit-event-dialog";
+
 export type EventTab = "checklist" | "bitacora" | "equipo";
 
 interface EventDetailViewProps {
-  activeTab: EventTab;
-  onTabChange: (tab: EventTab) => void;
-  onBack: () => void;
+  initialData: EventWithDetails; // Recibimos el evento completo de la DB
+  currentUser: User;
 }
 
 export function EventDetailView({
-  activeTab,
-  onTabChange,
-  onBack,
+  initialData,
+  currentUser,
 }: EventDetailViewProps) {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<EventTab>("checklist");
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Si initialData es undefined (por seguridad), no renderizamos o mostramos loading
+  if (!initialData) return null;
+
+  // Formato de fechas
+  const startDate = new Date(initialData.startDate).toLocaleDateString(
+    "es-ES",
+    {
+      day: "numeric",
+      month: "short",
+    },
+  );
+
+  const endDate = initialData.endDate
+    ? new Date(initialData.endDate).toLocaleDateString("es-ES", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : null;
+
   return (
-    <div className="flex flex-col min-h-full bg-background pb-20">
-      {/* Hero Section */}
-      <div className="relative h-64 w-full shrink-0">
-        <Image
-          src="/images/trip-south.jpg"
-          alt="Vacaciones en Cancún"
-          fill
-          className="object-cover"
-          priority // Prioridad alta para que cargue inmediato (LCP)
-        />
-        <div className="absolute inset-0 bg-linear-to-t from-black/70 via-black/30 to-transparent" />
+    <div className="flex flex-col min-h-screen bg-background pb-20">
+      {/* 1. HERO SECTION (Color Dinámico) */}
+      <div
+        className="relative h-64 w-full shrink-0 transition-colors"
+        style={{ backgroundColor: initialData.color }} // <--- Color de la DB
+      >
+        {/* Gradiente para legibilidad */}
+        <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent" />
 
         {/* Back Button */}
         <button
-          onClick={onBack}
-          className="absolute top-4 left-4 h-11 w-11 bg-black/30 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-black/50 active:scale-95 transition-all"
+          onClick={() => router.back()}
+          className="absolute top-4 left-4 h-10 w-10 bg-black/20 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-black/40 active:scale-95 transition-all text-white border border-white/10"
           aria-label="Volver"
         >
-          <ArrowLeft className="h-5 w-5 text-white" />
+          <ArrowLeft className="h-5 w-5" />
         </button>
 
-        {/* Title */}
-        <div className="absolute bottom-0 left-0 right-0 p-4">
-          <h1 className="text-2xl font-bold text-white mb-1">
-            Vacaciones en Cancún
+        <button
+          onClick={() => setShowSettings(true)}
+          className="absolute top-4 right-4 h-10 w-10 bg-black/20 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-black/40 active:scale-95 transition-all text-white border border-white/10"
+        >
+          <Settings className="h-5 w-5" />
+        </button>
+
+        {/* Title & Info */}
+        <div className="absolute bottom-0 left-0 right-0 p-6">
+          <h1 className="text-3xl font-bold text-white mb-2 drop-shadow-md">
+            {initialData.title}
           </h1>
-          <div className="flex items-center gap-3 text-white/80">
-            <span className="flex items-center gap-1.5">
-              <MapPin className="h-4 w-4" />
-              Cancún, México
+
+          <div className="flex flex-wrap items-center gap-4 text-white/90 text-sm font-medium">
+            {/* Ubicación (Solo si existe) */}
+            {initialData.location && (
+              <span className="flex items-center gap-1.5 bg-black/20 px-2 py-1 rounded-md backdrop-blur-sm">
+                <MapPin className="h-4 w-4" />
+                {initialData.location}
+              </span>
+            )}
+
+            {/* Fechas */}
+            <span className="flex items-center gap-1.5 bg-black/20 px-2 py-1 rounded-md backdrop-blur-sm">
+              <CalendarIcon className="h-4 w-4" />
+              {startDate} {endDate ? `- ${endDate}` : ""}
             </span>
-            <span className="text-white/60">|</span>
-            <span>10 - 20 Ene 2025</span>
           </div>
         </div>
       </div>
 
-      {/* Weather Alert Banner - Glassmorphism */}
-      <div className="px-4 -mt-5 relative z-10">
-        <Card className="p-4 bg-amber-500/90 backdrop-blur-md border-0 text-white shadow-lg">
-          <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-              <CloudRain className="h-5 w-5" />
+      {/* 2. WEATHER ALERT (Opcional / Mockup) */}
+      {/* Solo mostramos esto si es un Evento tipo "Viaje" (puedes ajustar esta lógica) */}
+      {initialData.location && (
+        <div className="px-4 -mt-6 relative z-10 mb-2">
+          <Card className="p-3 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-amber-500/30 shadow-lg flex items-center gap-3">
+            <div className="h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 dark:text-amber-500 shrink-0">
+              <CloudRain className="h-4 w-4" />
             </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <AlertTriangle className="h-4 w-4" />
-                <span className="font-semibold text-sm">Alerta de Clima</span>
-              </div>
-              <p className="text-sm text-white/90">
-                Lluvia pronosticada para la tarde. Revisa tu equipamiento
-                impermeable.
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-foreground flex items-center gap-1">
+                Clima en {initialData.location.split(",")[0]}
+                <span className="text-[10px] font-normal text-muted-foreground ml-auto">
+                  Hoy
+                </span>
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                Parcialmente nublado, 28°C. Sin lluvias previstas.
               </p>
             </div>
-          </div>
-        </Card>
-      </div>
+          </Card>
+        </div>
+      )}
 
-      {/* Tabs Navigation - Sticky */}
-      <div className="sticky top-0 z-20 bg-background pt-4 px-4">
+      {/* 3. TABS NAVIGATION */}
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm pt-2 px-4 border-b border-border/40 pb-2">
         <Tabs
           value={activeTab}
-          onValueChange={(v) => onTabChange(v as EventTab)}
+          onValueChange={(v) => setActiveTab(v as EventTab)}
+          className="w-full"
         >
-          <TabsList className="w-full h-12 bg-muted/50 p-1 rounded-xl">
-            <TabsTrigger
-              value="checklist"
-              className="flex-1 h-10 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-medium"
-            >
+          <TabsList className="w-full h-10 bg-muted/50 p-1 rounded-lg grid grid-cols-3">
+            <TabsTrigger value="checklist" className="text-xs font-medium">
               Checklist
             </TabsTrigger>
-            <TabsTrigger
-              value="bitacora"
-              className="flex-1 h-10 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-medium"
-            >
+            <TabsTrigger value="bitacora" className="text-xs font-medium">
               Bitácora
             </TabsTrigger>
-            <TabsTrigger
-              value="equipo"
-              className="flex-1 h-10 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-medium"
-            >
+            <TabsTrigger value="equipo" className="text-xs font-medium">
               Equipo
             </TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
 
-      {/* Tabs Content Wrapper */}
-      <div className="px-4 mt-2 flex-1">
-        {activeTab === "checklist" && <ChecklistTab />}
-        {activeTab === "bitacora" && <MemoriesTab />}
-        {activeTab === "equipo" && <TeamTab />}
+      {/* 4. TABS CONTENT */}
+      {/* NOTA: Aquí pasaremos los datos reales a los hijos en el siguiente paso.
+          Por ahora, les pasamos la data o placeholders para que no rompa.
+      */}
+      <div className="px-4 mt-4 flex-1">
+        {activeTab === "checklist" && (
+          <ChecklistTab
+            categories={initialData.checklistCategories}
+            eventId={initialData.id}
+          />
+        )}
+
+        {activeTab === "bitacora" && (
+          <MemoriesTab
+            eventId={initialData.id}
+            initialMemories={initialData.memories}
+            userId={currentUser.id!}
+          />
+        )}
+
+        {activeTab === "equipo" && (
+          <TeamTab
+            collaborators={initialData.collaborators}
+            currentUser={currentUser}
+          />
+        )}
       </div>
+      {/* --- 5. MODAL DE CONFIGURACIÓN --- */}
+      <EditEventDialog
+        open={showSettings}
+        onOpenChange={setShowSettings}
+        event={{
+          id: initialData.id,
+          title: initialData.title,
+          location: initialData.location,
+          startDate: initialData.startDate,
+          endDate: initialData.endDate,
+          color: initialData.color,
+        }}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Search,
   SlidersHorizontal,
@@ -12,7 +12,6 @@ import {
   X,
   FolderPlus,
   MoreVertical,
-  UserPlus,
   Users,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -48,6 +47,17 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import {
+  toggleChecklistItem,
+  createChecklistItem,
+  createCategory,
+  deleteChecklistItem,
+  updateCategoryName,
+  deleteCategory as deleteCategoryAction,
+  updateChecklistItem,
+} from "@/actions/checklist-actions";
+import { toast } from "sonner";
+import { usePathname } from "next/navigation";
 
 type Priority = "alta" | "media" | "baja";
 
@@ -57,7 +67,7 @@ interface User {
   avatar: string;
 }
 
-interface ChecklistItem {
+interface ChecklistItemUI {
   id: string;
   name: string;
   priority: Priority;
@@ -65,138 +75,18 @@ interface ChecklistItem {
   assignedTo: User[];
 }
 
-interface Category {
+interface CategoryUI {
   id: string;
   name: string;
-  items: ChecklistItem[];
+  items: ChecklistItemUI[];
+}
+
+interface ChecklistTabProps {
+  eventId: string;
+  categories: any[];
 }
 
 // Event participants - in a real app this would come from the event data
-const eventParticipants: User[] = [
-  {
-    id: "1",
-    name: "Juan García",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=juan",
-  },
-  {
-    id: "2",
-    name: "María López",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=maria",
-  },
-  {
-    id: "3",
-    name: "Carlos Ruiz",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=carlos",
-  },
-  {
-    id: "4",
-    name: "Ana Martín",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=ana",
-  },
-];
-
-const initialCategories: Category[] = [
-  {
-    id: "hygiene",
-    name: "Higiene",
-    items: [
-      {
-        id: "1",
-        name: "Cepillo de dientes",
-        priority: "media",
-        completed: true,
-        assignedTo: [eventParticipants[0]],
-      },
-      {
-        id: "2",
-        name: "Bloqueador solar",
-        priority: "alta",
-        completed: false,
-        assignedTo: [eventParticipants[1], eventParticipants[0]],
-      },
-      {
-        id: "3",
-        name: "Repelente de insectos",
-        priority: "media",
-        completed: false,
-        assignedTo: [],
-      },
-    ],
-  },
-  {
-    id: "documentation",
-    name: "Documentación",
-    items: [
-      {
-        id: "4",
-        name: "Pasaportes",
-        priority: "alta",
-        completed: true,
-        assignedTo: [
-          eventParticipants[0],
-          eventParticipants[1],
-          eventParticipants[2],
-        ],
-      },
-      {
-        id: "5",
-        name: "Reservas de hotel",
-        priority: "alta",
-        completed: false,
-        assignedTo: [eventParticipants[0]],
-      },
-      {
-        id: "6",
-        name: "Seguro de viaje",
-        priority: "alta",
-        completed: false,
-        assignedTo: [],
-      },
-      {
-        id: "7",
-        name: "Licencia de conducir",
-        priority: "media",
-        completed: true,
-        assignedTo: [eventParticipants[2]],
-      },
-    ],
-  },
-  {
-    id: "clothing",
-    name: "Ropa",
-    items: [
-      {
-        id: "8",
-        name: "Trajes de baño",
-        priority: "alta",
-        completed: false,
-        assignedTo: [eventParticipants[1], eventParticipants[3]],
-      },
-      {
-        id: "9",
-        name: "Sandalias",
-        priority: "media",
-        completed: true,
-        assignedTo: [],
-      },
-      {
-        id: "10",
-        name: "Ropa ligera",
-        priority: "media",
-        completed: false,
-        assignedTo: [eventParticipants[3]],
-      },
-      {
-        id: "11",
-        name: "Gorra o sombrero",
-        priority: "baja",
-        completed: false,
-        assignedTo: [],
-      },
-    ],
-  },
-];
-
 const priorityConfig: Record<
   Priority,
   { bg: string; text: string; label: string }
@@ -206,8 +96,56 @@ const priorityConfig: Record<
   baja: { bg: "bg-green-100", text: "text-green-700", label: "Baja" },
 };
 
-export function ChecklistTab() {
-  const [categories, setCategories] = useState(initialCategories);
+const eventParticipants: User[] = [
+  { id: "1", name: "Yo", avatar: "" },
+  { id: "2", name: "Invitado", avatar: "" },
+];
+
+export function ChecklistTab({
+  eventId,
+  categories: dbCategories,
+}: ChecklistTabProps) {
+  const pathname = usePathname();
+  const mapPriority = (p: string): Priority => {
+    const map: Record<string, Priority> = {
+      high: "alta",
+      medium: "media",
+      low: "baja",
+      alta: "alta",
+      media: "media",
+      baja: "baja",
+    };
+    return map[p] || "media"; // Si no encuentra nada, devuelve "media" por defecto
+  };
+  const initialCategories: CategoryUI[] = dbCategories.map((cat) => ({
+    id: cat.id,
+    name: cat.name,
+    items: cat.items.map((item: any) => ({
+      id: item.id,
+      name: item.title, // DB: title -> UI: name
+      priority: mapPriority(item.priority),
+      completed: item.isCompleted, // DB: isCompleted -> UI: completed
+      assignedTo: [], // DB aún no tiene asignaciones, lo dejamos vacío
+    })),
+  }));
+
+  const [categories, setCategories] = useState<CategoryUI[]>(initialCategories);
+
+  useEffect(() => {
+    setCategories(
+      dbCategories.map((cat) => ({
+        id: cat.id,
+        name: cat.name,
+        items: cat.items.map((item: any) => ({
+          id: item.id,
+          name: item.title,
+          priority: mapPriority(item.priority),
+          completed: item.isCompleted,
+          assignedTo: [],
+        })),
+      })),
+    );
+  }, [dbCategories]);
   const [searchQuery, setSearchQuery] = useState("");
 
   // Category management state
@@ -229,14 +167,14 @@ export function ChecklistTab() {
   // Edit item modal state
   const [editingItem, setEditingItem] = useState<{
     categoryId: string;
-    item: ChecklistItem;
+    item: ChecklistItemUI;
   } | null>(null);
   const [editItemName, setEditItemName] = useState("");
   const [editItemPriority, setEditItemPriority] = useState<Priority>("media");
   const [editItemAssignees, setEditItemAssignees] = useState<User[]>([]);
 
   // Toggle item completion
-  const toggleItem = (categoryId: string, itemId: string) => {
+  const toggleItem = async (categoryId: string, itemId: string) => {
     setCategories((prev) =>
       prev.map((category) =>
         category.id === categoryId
@@ -251,24 +189,71 @@ export function ChecklistTab() {
           : category,
       ),
     );
-  };
+    const category = categories.find((c) => c.id === categoryId);
+    const item = category?.items.find((i) => i.id === itemId);
+    if (!item) return;
 
-  // Category CRUD
-  const addCategory = () => {
-    if (newCategoryName.trim()) {
-      const newCategory: Category = {
-        id: `cat-${Date.now()}`,
-        name: newCategoryName.trim(),
-        items: [],
-      };
-      setCategories([...categories, newCategory]);
-      setNewCategoryName("");
-      setShowAddCategory(false);
+    const result = await toggleChecklistItem(itemId, !item.completed, pathname);
+
+    if (!result.success) {
+      toast.error("Error al actualizar");
     }
   };
 
-  const updateCategory = (categoryId: string) => {
+  // Category CRUD
+  const handleAddCategory = async () => {
+    if (newCategoryName.trim()) {
+      const result = await createCategory(
+        eventId,
+        newCategoryName.trim(),
+        pathname,
+      );
+      if (result.success) {
+        setNewCategoryName("");
+        setShowAddCategory(false);
+        toast.success("Categoría creada");
+      } else {
+        toast.error("Error al crear categoría");
+      }
+    }
+  };
+
+  const handleAddItem = async (categoryId: string) => {
+    if (newItemName.trim()) {
+      // Optimistic update local (opcional, aquí esperamos al server mejor)
+      const result = await createChecklistItem(
+        categoryId,
+        newItemName.trim(),
+        newItemPriority,
+        pathname,
+      );
+
+      if (result.success) {
+        resetAddItemForm();
+        toast.success("Ítem agregado");
+      } else {
+        toast.error("Error al agregar ítem");
+      }
+    }
+  };
+
+  const handleDeleteItem = async (categoryId: string, itemId: string) => {
+    setCategories(
+      categories.map((cat) =>
+        cat.id === categoryId
+          ? { ...cat, items: cat.items.filter((item) => item.id !== itemId) }
+          : cat,
+      ),
+    );
+
+    const result = await deleteChecklistItem(itemId, pathname);
+    if (!result.success) toast.error("Error al eliminar");
+    else toast.success("Ítem eliminado");
+  };
+
+  const handleUpdateCategory = async (categoryId: string) => {
     if (editingCategoryName.trim()) {
+      // Optimistic update
       setCategories(
         categories.map((cat) =>
           cat.id === categoryId
@@ -276,52 +261,40 @@ export function ChecklistTab() {
             : cat,
         ),
       );
+
+      const result = await updateCategoryName(
+        categoryId,
+        editingCategoryName.trim(),
+        pathname,
+      );
+
       setEditingCategoryId(null);
       setEditingCategoryName("");
+
+      if (result.success) toast.success("Categoría actualizada");
+      else toast.error("Error al actualizar categoría");
     }
   };
 
-  const deleteCategory = (categoryId: string) => {
+  const handleDeleteCategory = async (categoryId: string) => {
+    // Confirmación simple
+    if (
+      !confirm("¿Estás seguro? Se borrarán todos los ítems de esta categoría.")
+    )
+      return;
+
+    // Optimistic delete
     setCategories(categories.filter((cat) => cat.id !== categoryId));
+
+    const result = await deleteCategoryAction(categoryId, pathname);
+
+    if (result.success) toast.success("Categoría eliminada");
+    else toast.error("Error al eliminar categoría");
   };
 
-  // Item CRUD with multi-user assignment
-  const addItem = (categoryId: string) => {
-    if (newItemName.trim()) {
-      const newItem: ChecklistItem = {
-        id: `item-${Date.now()}`,
-        name: newItemName.trim(),
-        priority: newItemPriority,
-        completed: false,
-        assignedTo: newItemAssignees,
-      };
-      setCategories(
-        categories.map((cat) =>
-          cat.id === categoryId
-            ? { ...cat, items: [...cat.items, newItem] }
-            : cat,
-        ),
-      );
-      resetAddItemForm();
-    }
-  };
-
-  const resetAddItemForm = () => {
-    setAddingItemToCategoryId(null);
-    setNewItemName("");
-    setNewItemPriority("media");
-    setNewItemAssignees([]);
-  };
-
-  const openEditModal = (categoryId: string, item: ChecklistItem) => {
-    setEditingItem({ categoryId, item });
-    setEditItemName(item.name);
-    setEditItemPriority(item.priority);
-    setEditItemAssignees(item.assignedTo);
-  };
-
-  const saveEditItem = () => {
+  const handleSaveEditItem = async () => {
     if (editingItem && editItemName.trim()) {
+      // Optimistic Update
       setCategories(
         categories.map((cat) =>
           cat.id === editingItem.categoryId
@@ -341,25 +314,39 @@ export function ChecklistTab() {
             : cat,
         ),
       );
+
+      const result = await updateChecklistItem(
+        editingItem.item.id,
+        editItemName.trim(),
+        editItemPriority,
+        pathname,
+      );
+
       closeEditModal();
+
+      if (result.success) toast.success("Ítem actualizado");
+      else toast.error("Error al actualizar ítem");
     }
   };
 
+  const resetAddItemForm = () => {
+    setAddingItemToCategoryId(null);
+    setNewItemName("");
+    setNewItemPriority("media");
+    setNewItemAssignees([]);
+  };
+
+  const openEditModal = (categoryId: string, item: ChecklistItemUI) => {
+    setEditingItem({ categoryId, item });
+    setEditItemName(item.name);
+    setEditItemPriority(item.priority);
+    setEditItemAssignees(item.assignedTo);
+  };
   const closeEditModal = () => {
     setEditingItem(null);
     setEditItemName("");
     setEditItemPriority("media");
     setEditItemAssignees([]);
-  };
-
-  const deleteItem = (categoryId: string, itemId: string) => {
-    setCategories(
-      categories.map((cat) =>
-        cat.id === categoryId
-          ? { ...cat, items: cat.items.filter((item) => item.id !== itemId) }
-          : cat,
-      ),
-    );
   };
 
   const toggleUserAssignment = (
@@ -443,12 +430,6 @@ export function ChecklistTab() {
           );
         })}
       </div>
-      {selectedUsers.length > 0 && (
-        <p className="text-xs text-muted-foreground">
-          {selectedUsers.length} persona{selectedUsers.length !== 1 ? "s" : ""}{" "}
-          asignada{selectedUsers.length !== 1 ? "s" : ""}
-        </p>
-      )}
     </div>
   );
 
@@ -495,13 +476,6 @@ export function ChecklistTab() {
             className="pl-10 h-12 bg-muted/50 border-0 rounded-xl"
           />
         </div>
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-12 w-12 rounded-xl border-border bg-transparent"
-        >
-          <SlidersHorizontal className="h-5 w-5" />
-        </Button>
       </div>
 
       {/* Progress Summary */}
@@ -528,14 +502,14 @@ export function ChecklistTab() {
               placeholder="Nombre de la categoría..."
               value={newCategoryName}
               onChange={(e) => setNewCategoryName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addCategory()}
+              onKeyDown={(e) => e.key === "Enter" && handleAddCategory()}
               className="h-10 rounded-lg"
               autoFocus
             />
             <Button
               size="icon"
               className="h-10 w-10 rounded-lg"
-              onClick={addCategory}
+              onClick={handleAddCategory}
             >
               <Check className="h-4 w-4" />
             </Button>
@@ -555,7 +529,7 @@ export function ChecklistTab() {
       )}
 
       {/* Empty State */}
-      {categories.length === 0 ? (
+      {categories.length === 0 && !showAddCategory ? (
         <Card className="p-8 border-dashed border-2 bg-muted/20">
           <div className="flex flex-col items-center text-center">
             <div className="h-24 w-24 rounded-full bg-muted flex items-center justify-center mb-4">
@@ -572,7 +546,7 @@ export function ChecklistTab() {
               className="h-12 px-6 rounded-xl"
               onClick={() => setShowAddCategory(true)}
             >
-              Crear primera categoría
+              Crear categoría
             </Button>
           </div>
         </Card>
@@ -590,51 +564,50 @@ export function ChecklistTab() {
               className="border border-border rounded-xl px-4 bg-card overflow-hidden"
             >
               <div className="flex items-center">
-                <AccordionTrigger className="py-4 hover:no-underline flex-1">
-                  {editingCategoryId === category.id ? (
-                    <div
-                      className="flex items-center gap-2 flex-1"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Input
-                        value={editingCategoryName}
-                        onChange={(e) => setEditingCategoryName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") updateCategory(category.id);
-                          if (e.key === "Escape") {
-                            setEditingCategoryId(null);
-                            setEditingCategoryName("");
-                          }
-                        }}
-                        className="h-8 rounded-lg"
-                        autoFocus
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          updateCategory(category.id);
-                        }}
-                      >
-                        <Check className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8"
-                        onClick={(e) => {
-                          e.stopPropagation();
+                {editingCategoryId === category.id ? (
+                  /* Edit Category Name Input */
+                  <div className="flex flex-1 items-center gap-2 py-4">
+                    <Input
+                      value={editingCategoryName}
+                      onChange={(e) => setEditingCategoryName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter")
+                          handleUpdateCategory(category.id);
+                        if (e.key === "Escape") {
                           setEditingCategoryId(null);
                           setEditingCategoryName("");
-                        }}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ) : (
+                        }
+                      }}
+                      className="h-8 rounded-lg"
+                      autoFocus
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 shrink-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleUpdateCategory(category.id);
+                      }}
+                    >
+                      <Check className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 shrink-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingCategoryId(null);
+                        setEditingCategoryName("");
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <AccordionTrigger className="py-4 hover:no-underline flex-1">
                     <div className="flex items-center gap-3">
                       <span className="font-semibold text-foreground">
                         {category.name}
@@ -644,10 +617,10 @@ export function ChecklistTab() {
                         {category.items.length}
                       </span>
                     </div>
-                  )}
-                </AccordionTrigger>
+                  </AccordionTrigger>
+                )}
 
-                {/* Category Actions */}
+                {/* Category Actions Dropdown */}
                 {editingCategoryId !== category.id && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -672,7 +645,7 @@ export function ChecklistTab() {
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
-                        onClick={() => deleteCategory(category.id)}
+                        onClick={() => handleDeleteCategory(category.id)}
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
                         Eliminar categoría
@@ -741,7 +714,9 @@ export function ChecklistTab() {
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
-                              onClick={() => deleteItem(category.id, item.id)}
+                              onClick={() =>
+                                handleDeleteItem(category.id, item.id)
+                              }
                             >
                               <Trash2 className="h-4 w-4 mr-2" />
                               Eliminar ítem
@@ -752,7 +727,7 @@ export function ChecklistTab() {
                     </div>
                   ))}
 
-                  {/* Add Item Form - Expanded */}
+                  {/* Add Item Form */}
                   {addingItemToCategoryId === category.id ? (
                     <Card className="p-4 mt-3 border-primary/30 bg-primary/5 space-y-4">
                       <div className="space-y-3">
@@ -774,46 +749,23 @@ export function ChecklistTab() {
                               <SelectValue placeholder="Prioridad" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="alta">
-                                <span className="flex items-center gap-2">
-                                  <span className="h-2 w-2 rounded-full bg-red-500" />
-                                  Alta
-                                </span>
-                              </SelectItem>
-                              <SelectItem value="media">
-                                <span className="flex items-center gap-2">
-                                  <span className="h-2 w-2 rounded-full bg-yellow-500" />
-                                  Media
-                                </span>
-                              </SelectItem>
-                              <SelectItem value="baja">
-                                <span className="flex items-center gap-2">
-                                  <span className="h-2 w-2 rounded-full bg-green-500" />
-                                  Baja
-                                </span>
-                              </SelectItem>
+                              <SelectItem value="alta">Alta</SelectItem>
+                              <SelectItem value="media">Media</SelectItem>
+                              <SelectItem value="baja">Baja</SelectItem>
                             </SelectContent>
                           </Select>
-                        </div>
 
-                        {/* Multi-user assignment */}
-                        <UserSelector
-                          selectedUsers={newItemAssignees}
-                          onToggle={(user) =>
-                            toggleUserAssignment(
-                              user,
-                              newItemAssignees,
-                              setNewItemAssignees,
-                            )
-                          }
-                          compact
-                        />
+                          {/* Selector de Usuarios (Visual por ahora) */}
+                          <div className="flex-1">
+                            {/* Puedes poner el UserSelector aquí si quieres habilitarlo al crear */}
+                          </div>
+                        </div>
                       </div>
 
                       <div className="flex gap-2 pt-2 border-t border-border">
                         <Button
                           className="flex-1 h-10 rounded-lg"
-                          onClick={() => addItem(category.id)}
+                          onClick={() => handleAddItem(category.id)}
                           disabled={!newItemName.trim()}
                         >
                           <Check className="h-4 w-4 mr-2" />
@@ -845,7 +797,6 @@ export function ChecklistTab() {
           ))}
         </Accordion>
       )}
-
       {/* Edit Item Modal */}
       <Dialog
         open={!!editingItem}
@@ -902,7 +853,6 @@ export function ChecklistTab() {
               </Select>
             </div>
 
-            {/* Multi-user assignment */}
             <div className="space-y-2">
               <label className="text-sm font-medium">Responsables</label>
               <UserSelector
@@ -922,7 +872,10 @@ export function ChecklistTab() {
             <Button variant="outline" onClick={closeEditModal}>
               Cancelar
             </Button>
-            <Button onClick={saveEditItem} disabled={!editItemName.trim()}>
+            <Button
+              onClick={handleSaveEditItem}
+              disabled={!editItemName.trim()}
+            >
               Guardar cambios
             </Button>
           </DialogFooter>

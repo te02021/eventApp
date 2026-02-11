@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
+import createEvent from "@/actions/event-actions";
 
 interface CreationModalProps {
   open: boolean;
@@ -83,9 +84,11 @@ export function CreationModal({ open, onOpenChange }: CreationModalProps) {
   const [step, setStep] = useState<Step>(1);
   const [selectedType, setSelectedType] = useState<EventType>(null);
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [color, setColor] = useState("#4f46e5");
 
   // Category management state
   const [categories, setCategories] = useState<Category[]>([]);
@@ -112,6 +115,7 @@ export function CreationModal({ open, onOpenChange }: CreationModalProps) {
       setSelectedType(null);
       setTitle("");
       setLocation("");
+      setDescription("");
       setStartDate("");
       setEndDate("");
       setCategories([]);
@@ -143,17 +147,30 @@ export function CreationModal({ open, onOpenChange }: CreationModalProps) {
     }
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
+    // 1. Transformamos los datos para que coincidan con el Backend (name -> title)
+    const formattedCategories = categories.map((cat) => ({
+      name: cat.name,
+      items: cat.items.map((item) => ({
+        title: item.name, // <--- AQUÍ ESTÁ LA SOLUCIÓN
+        isCompleted: item.completed, // Si el back lo pide, agrégalo también
+      })),
+    }));
+
     const payload = {
       type: selectedType,
+      description,
       title,
       location,
-      startDate,
-      endDate: selectedType === "event" ? endDate : null,
-      categories,
-    };
+      startDate: new Date(startDate),
+      endDate: selectedType === "event" && endDate ? new Date(endDate) : null,
 
-    console.log("Creando Evento/Rutina:", payload);
+      categories: formattedCategories,
+
+      color,
+    };
+    await createEvent(payload);
+
     handleClose();
   };
 
@@ -498,6 +515,23 @@ export function CreationModal({ open, onOpenChange }: CreationModalProps) {
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="description" className="text-sm font-medium">
+                  Descripcion
+                </Label>
+                <Input
+                  id="title"
+                  placeholder={
+                    selectedType === "event"
+                      ? "Ej: Ir de viaje a la playa a descansar"
+                      : "Ej: Tomar la pastilla de la tiroides"
+                  }
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="h-12 text-base rounded-xl"
+                />
+              </div>
+
               {/* Location Input with Map Preview */}
               <div className="space-y-2">
                 <Label htmlFor="location" className="text-sm font-medium">
@@ -522,6 +556,49 @@ export function CreationModal({ open, onOpenChange }: CreationModalProps) {
                   </Card>
                 )}
               </div>
+
+              {/* Color Picker*/}
+              {selectedType === "event" && (
+                <div className="space-y-2">
+                  <Label htmlFor="color" className="text-sm font-medium">
+                    Color de portada
+                  </Label>
+                  <div className="flex gap-3">
+                    {/* Input de texto para el código Hex */}
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                        #
+                      </span>
+                      <Input
+                        id="color"
+                        value={color.replace("#", "").toUpperCase()}
+                        onChange={(e) => setColor(`#${e.target.value}`)}
+                        className="pl-7 font-mono uppercase"
+                        maxLength={7}
+                      />
+                    </div>
+
+                    {/* El cuadradito de color (Trigger del Picker) */}
+                    <div className="relative h-10 w-12 shrink-0 overflow-hidden rounded-xl border border-input shadow-sm transition-all hover:scale-105 active:scale-95">
+                      {/* Fondo dinámico */}
+                      <div
+                        className="absolute inset-0"
+                        style={{ backgroundColor: color }}
+                      />
+                      {/* Input nativo invisible pero clickeable */}
+                      <input
+                        type="color"
+                        value={color}
+                        onChange={(e) => setColor(e.target.value)}
+                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Este color se usará para el fondo de la tarjeta.
+                  </p>
+                </div>
+              )}
 
               {/* Date Inputs - Only for Events */}
               {selectedType === "event" && (

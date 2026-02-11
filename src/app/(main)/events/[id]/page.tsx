@@ -1,35 +1,27 @@
-"use client";
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { auth } from "@/auth";
+import { getEventById } from "@/lib/data";
+import { notFound, redirect } from "next/navigation";
 import { EventDetailView } from "@/components/event-app/event-detail-view";
 
-// Definimos el tipo de pestaña que usaba v0
-type EventTab = "checklist" | "bitacora" | "equipo";
+// 1. CAMBIO IMPORTANTE: Definimos params como una Promesa
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
 
-export default function EventDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
-  const router = useRouter();
+export default async function EventDetailPage({ params }: PageProps) {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
 
-  // Estado local para manejar qué pestaña se ve (Checklist vs Bitácora)
-  const [currentTab, setCurrentTab] = useState<EventTab>("checklist");
+  // 2. CAMBIO IMPORTANTE: Esperamos a que params se resuelva
+  const resolvedParams = await params;
+  const eventId = resolvedParams.id;
 
-  const handleBack = () => {
-    // Vuelve a la página anterior (Dashboard o Calendario)
-    router.back();
-  };
+  // 3. Ahora sí consultamos la DB con el ID seguro
+  const eventData = await getEventById(eventId);
 
-  // Nota: En el futuro, usaremos params.id para cargar los datos reales de la DB.
-  // Por ahora, EventDetailView mostrará datos estáticos.
+  if (!eventData) {
+    notFound();
+  }
 
-  return (
-    <EventDetailView
-      activeTab={currentTab}
-      onTabChange={setCurrentTab}
-      onBack={handleBack}
-    />
-  );
+  return <EventDetailView initialData={eventData} currentUser={session.user} />;
 }

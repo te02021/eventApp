@@ -25,7 +25,7 @@ export async function login(prevState: PrevState, formData: FormData) {
     await signIn("credentials", {
       email: formData.get("email"),
       password: formData.get("password"),
-      redirectTo: "/", // O "/dashboard" si esa es tu ruta protegida
+      redirectTo: "/",
     });
   } catch (error) {
     if (error instanceof AuthError) {
