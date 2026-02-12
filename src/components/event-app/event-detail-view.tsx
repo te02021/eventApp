@@ -21,6 +21,8 @@ import type { EventWithDetails } from "@/lib/data";
 import type { User } from "next-auth";
 import { EditEventDialog } from "./edit-event-dialog";
 
+import { WeatherCard } from "@/components/event-app/weather-card";
+
 export type EventTab = "checklist" | "bitacora" | "equipo";
 
 interface EventDetailViewProps {
@@ -109,23 +111,12 @@ export function EventDetailView({
       {/* 2. WEATHER ALERT (Opcional / Mockup) */}
       {/* Solo mostramos esto si es un Evento tipo "Viaje" (puedes ajustar esta lógica) */}
       {initialData.location && (
-        <div className="px-4 -mt-6 relative z-10 mb-2">
-          <Card className="p-3 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-amber-500/30 shadow-lg flex items-center gap-3">
-            <div className="h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 dark:text-amber-500 shrink-0">
-              <CloudRain className="h-4 w-4" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-foreground flex items-center gap-1">
-                Clima en {initialData.location.split(",")[0]}
-                <span className="text-[10px] font-normal text-muted-foreground ml-auto">
-                  Hoy
-                </span>
-              </p>
-              <p className="text-xs text-muted-foreground truncate">
-                Parcialmente nublado, 28°C. Sin lluvias previstas.
-              </p>
-            </div>
-          </Card>
+        <div className="px-4 -mt-5 relative z-10 mb-4 max-w-3xl mx-auto w-full">
+          <WeatherCard
+            locationName={initialData.location}
+            variant="detail"
+            className="rounded-xl"
+          />
         </div>
       )}
 

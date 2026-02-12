@@ -23,15 +23,45 @@ interface UpdateEventData {
   color: string;
 }
 
+const getFixedDate = (
+  dateInput: Date | string,
+  hours: number,
+  minutes: number,
+  seconds: number,
+) => {
+  const d = new Date(dateInput);
+
+  // 1. Obtenemos los componentes "nominales" (lo que el usuario eligió en el input)
+  // getTimezoneOffset nos da la diferencia en minutos. La sumamos para volver al valor "puro".
+  const timeZoneOffsetMs = d.getTimezoneOffset() * 60000;
+  const nominalDate = new Date(d.getTime() + timeZoneOffsetMs);
+
+  // 2. Construimos la fecha en UTC con esos componentes nominales y la hora deseada
+  return new Date(
+    Date.UTC(
+      nominalDate.getFullYear(),
+      nominalDate.getMonth(),
+      nominalDate.getDate(),
+      hours,
+      minutes,
+      seconds,
+    ),
+  );
+};
+
 export async function updateEvent(eventId: string, data: UpdateEventData) {
   try {
+    const startDate = getFixedDate(data.startDate, 0, 0, 0);
+    const endDate = data.endDate
+      ? getFixedDate(data.endDate, 23, 59, 59)
+      : getFixedDate(data.startDate, 23, 59, 59);
     await db
       .update(events)
       .set({
         title: data.title,
         location: data.location,
-        startDate: data.startDate,
-        endDate: data.endDate,
+        startDate,
+        endDate,
         color: data.color,
       })
       .where(eq(events.id, eventId));
@@ -74,6 +104,10 @@ export default async function createEvent(rawData: CreateEventInput) {
   }
 
   try {
+    const startDate = getFixedDate(validateData.data.startDate, 0, 0, 0);
+    const endDate = validateData.data.endDate
+      ? getFixedDate(validateData.data.endDate, 23, 59, 59)
+      : getFixedDate(validateData.data.startDate, 23, 59, 59);
     await db.transaction(async (tx) => {
       const [newEvent] = await tx
         .insert(events)
@@ -82,9 +116,9 @@ export default async function createEvent(rawData: CreateEventInput) {
           description: validateData.data.description,
           color: validateData.data.color,
           type: validateData.data.type ?? "event",
-          startDate: validateData.data.startDate,
+          startDate,
           location: validateData.data.location,
-          endDate: validateData.data.endDate ? validateData.data.endDate : null,
+          endDate,
           createdById: session.user.id,
         })
         .returning({ id: events.id });

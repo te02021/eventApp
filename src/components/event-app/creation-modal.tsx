@@ -28,6 +28,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import createEvent from "@/actions/event-actions";
+import { LocationInput } from "../location-input";
 
 interface CreationModalProps {
   open: boolean;
@@ -538,13 +539,10 @@ export function CreationModal({ open, onOpenChange }: CreationModalProps) {
                   Ubicación
                 </Label>
                 <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                  <Input
-                    id="location"
-                    placeholder="Agregar ubicación"
+                  <LocationInput
                     value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    className="h-12 text-base rounded-xl pl-11"
+                    onChange={setLocation}
+                    className="h-12 rounded-xl"
                   />
                 </div>
                 {location && (

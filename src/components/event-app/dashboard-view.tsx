@@ -28,6 +28,8 @@ import type { DashboardEvent } from "@/lib/data";
 import { toggleRoutine } from "@/actions/routine-actions";
 import { toast } from "sonner";
 
+import { WeatherCard } from "@/components/event-app/weather-card";
+
 interface DashboardViewProps {
   user: Session["user"];
   events: DashboardEvent[];
@@ -41,45 +43,57 @@ export default function DashboardView({ user, events }: DashboardViewProps) {
   const [activeTab, setActiveTab] = useState<TabValue>("activos");
   const [medicationChecked, setMedicationChecked] = useState(false);
 
-  // 1. Definimos el momento actual (ESTO FALTABA)
   const now = new Date();
+  // Ignoramos la hora local, tomamos la fecha calendario actual y la convertimos a un timestamp UTC
+  const todayTimestamp = Date.UTC(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  );
 
-  // 2. Inicializamos las listas vacías
-  // (Les ponemos : any[] para que TypeScript no se queje al hacer push)
   const activeItems: any[] = [];
   const pendingItems: any[] = [];
   const historyItems: any[] = [];
 
-  // 3. Clasificamos cada ítem (Bucket Sort)
   events.forEach((item) => {
-    // CASO A: RUTINAS
     if (item.type === "routine") {
       if (item.isCompletedToday) {
-        historyItems.push(item); // Si ya la hice hoy -> Historial
+        historyItems.push(item);
       } else {
-        activeItems.push(item); // Si falta hacerla -> Activos
+        activeItems.push(item);
       }
-    }
-    // CASO B: EVENTOS (Viajes, Fiestas)
-    else {
+    } else {
+      // 2. Convertimos las fechas del evento a timestamps UTC limpios (solo fecha)
       const start = new Date(item.startDate);
-      // Ojo: endDate puede ser null, usamos start como fallback para comparar
+      // Extraemos componentes UTC porque así lo guardamos en la DB
+      const startTimestamp = Date.UTC(
+        start.getUTCFullYear(),
+        start.getUTCMonth(),
+        start.getUTCDate(),
+      );
+
       const end = item.endDate ? new Date(item.endDate) : start;
+      const endTimestamp = Date.UTC(
+        end.getUTCFullYear(),
+        end.getUTCMonth(),
+        end.getUTCDate(),
+      );
 
-      // Ajustamos 'end' al final del día (23:59:59) para que el evento
-      // no desaparezca a mitad del día, sino cuando el día termine.
-      end.setHours(23, 59, 59);
-
-      if (end < now) {
-        historyItems.push(item); // Ya terminó (fecha fin es menor a ahora) -> Historial
-      } else if (start > now) {
-        pendingItems.push(item); // Empieza en el futuro (fecha inicio es mayor a ahora) -> Pendientes
+      // 3. Comparación Simple de Números (Timestamps)
+      if (endTimestamp < todayTimestamp) {
+        historyItems.push(item); // Terminó ayer o antes
+      } else if (startTimestamp > todayTimestamp) {
+        pendingItems.push(item); // Empieza mañana o después
       } else {
-        activeItems.push(item); // Está ocurriendo en este momento -> Activos
+        activeItems.push(item); // Está ocurriendo hoy
       }
     }
   });
 
+  const featuredLocation =
+    activeItems.find((i) => i.location)?.location ||
+    pendingItems.find((i) => i.location)?.location ||
+    "Buenos Aires, Argentina"; // Fallback por defecto
   const handleCheck = async (routineId: string, routineTitle: string) => {
     // Usamos una promesa o simplemente esperamos, pero mostramos feedback rico
     const result = await toggleRoutine(routineId);
@@ -110,6 +124,33 @@ export default function DashboardView({ user, events }: DashboardViewProps) {
         description: "No se pudo guardar el cambio. Inténtalo de nuevo.",
       });
     }
+  };
+
+  const formatDate = (dateString: Date) => {
+    const d = new Date(dateString);
+    // Usamos UTC para mostrar porque así lo guardamos
+    return new Date(
+      d.getUTCFullYear(),
+      d.getUTCMonth(),
+      d.getUTCDate(),
+    ).toLocaleDateString();
+  };
+
+  const getCalendarData = (dateString: Date) => {
+    const d = new Date(dateString);
+    // Usamos UTC para extraer los datos visuales
+    const utcDate = new Date(
+      d.getUTCFullYear(),
+      d.getUTCMonth(),
+      d.getUTCDate(),
+    );
+    return {
+      day: utcDate.getDate(),
+      month: utcDate
+        .toLocaleString("es-ES", { month: "short" })
+        .toUpperCase()
+        .replace(".", ""),
+    };
   };
 
   return (
@@ -143,26 +184,7 @@ export default function DashboardView({ user, events }: DashboardViewProps) {
 
       <div className="px-4 py-4 space-y-5">
         {/* Weather Widget */}
-        <Card className="p-4 bg-linear-to-br from-sky-500 to-cyan-400 border-0 text-white">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center">
-                <Sun className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-sm text-white/80">Clima en Cancún</p>
-                <p className="text-xl font-bold">28°C</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-white/80">Parcialmente nublado</p>
-              <div className="flex items-center gap-1 mt-1">
-                <Cloud className="h-4 w-4 text-white/70" />
-                <span className="text-sm text-white/80">15%</span>
-              </div>
-            </div>
-          </div>
-        </Card>
+        <WeatherCard locationName={featuredLocation} variant="dashboard" />
 
         {/* Segmented Control Tabs */}
         <div className="flex bg-muted/50 p-1 rounded-xl">
@@ -205,7 +227,7 @@ export default function DashboardView({ user, events }: DashboardViewProps) {
                     <div className="relative z-10 flex flex-col justify-between h-full p-4">
                       <div className="flex gap-2">
                         <Badge className="bg-white/20 text-white border-0 text-xs backdrop-blur-md hover:bg-white/30">
-                          {new Date(event.startDate).toLocaleDateString()}
+                          {formatDate(event.startDate)}
                         </Badge>
                       </div>
 
@@ -293,14 +315,11 @@ export default function DashboardView({ user, events }: DashboardViewProps) {
             {pendingItems
               .filter((i) => i.type === "event")
               .map((event) => {
-                // Cálculo de fechas para el diseño de calendario
-                const dateObj = new Date(event.startDate);
-                const day = dateObj.getDate();
-                // Nombre del mes corto en mayúsculas (ej: ENE, FEB)
-                const month = dateObj
-                  .toLocaleString("es-ES", { month: "short" })
-                  .toUpperCase()
-                  .replace(".", "");
+                const { day, month } = getCalendarData(event.startDate);
+                const daysLeft = Math.ceil(
+                  (new Date(event.startDate).getTime() - now.getTime()) /
+                    (1000 * 60 * 60 * 24),
+                );
 
                 return (
                   <Link
@@ -309,15 +328,9 @@ export default function DashboardView({ user, events }: DashboardViewProps) {
                     className="block group mb-3"
                   >
                     <Card
-                      // 1. Quitamos border-l-4 y agregamos border-0
-                      // 2. Agregamos text-white para que todo el texto base sea blanco
                       className="flex overflow-hidden hover:shadow-lg active:scale-[0.98] transition-all cursor-pointer border-0 text-white"
-                      // 3. Aplicamos el color a TODO el fondo
                       style={{ backgroundColor: event.color }}
                     >
-                      {/* Lado Izquierdo: El Calendario Visual 
-                          Usamos bg-black/20 para oscurecer un poco el color base y crear separación
-                      */}
                       <div className="w-16 bg-black/20 flex flex-col items-center justify-center p-2 text-center shrink-0 backdrop-blur-sm">
                         <span className="text-xs font-semibold text-white/80">
                           {month}
@@ -326,32 +339,20 @@ export default function DashboardView({ user, events }: DashboardViewProps) {
                           {day}
                         </span>
                       </div>
-
-                      {/* Lado Derecho: Detalles */}
                       <div className="flex-1 p-4 flex items-center justify-between">
                         <div className="overflow-hidden pr-2">
-                          {/* Badge estilo cristal (blanco semitransparente) */}
                           <Badge className="mb-2 text-[10px] h-5 px-2 font-medium bg-white/25 hover:bg-white/40 text-white border-0 backdrop-blur-md">
-                            Faltan{" "}
-                            {Math.ceil(
-                              (dateObj.getTime() - now.getTime()) /
-                                (1000 * 60 * 60 * 24),
-                            )}{" "}
-                            días
+                            Faltan {daysLeft} días
                           </Badge>
-
                           <h3 className="font-bold text-lg text-white truncate drop-shadow-md">
                             {event.title}
                           </h3>
-
                           {event.location && (
                             <p className="text-xs text-white/90 mt-1 truncate max-w-50 flex items-center gap-1">
                               📍 {event.location}
                             </p>
                           )}
                         </div>
-
-                        {/* Icono decorativo semitransparente */}
                         <div className="text-white/40">
                           <CalendarDays className="h-6 w-6" />
                         </div>
@@ -376,6 +377,7 @@ export default function DashboardView({ user, events }: DashboardViewProps) {
           </div>
         )}
 
+        {/* CONTENIDO HISTORIAL */}
         {activeTab === "historial" && (
           <div className="space-y-3">
             {historyItems
@@ -399,8 +401,6 @@ export default function DashboardView({ user, events }: DashboardViewProps) {
                         </p>
                       </div>
                     </div>
-
-                    {/* Botón para DESMARCAR (si te equivocaste) */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -414,7 +414,6 @@ export default function DashboardView({ user, events }: DashboardViewProps) {
                 </Card>
               ))}
 
-            {/* EVENTOS PASADOS (Tu diseño de historial) */}
             {historyItems
               .filter((i) => i.type === "event")
               .map((event) => (
@@ -422,7 +421,6 @@ export default function DashboardView({ user, events }: DashboardViewProps) {
                   key={event.id}
                   className="p-4 opacity-60 grayscale hover:grayscale-0 transition-all"
                 >
-                  {/* ... Usa tu diseño simple de evento pasado ... */}
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded bg-muted flex items-center justify-center">
                       📅
@@ -431,16 +429,13 @@ export default function DashboardView({ user, events }: DashboardViewProps) {
                       <h3 className="font-semibold">{event.title}</h3>
                       <p className="text-xs">
                         Finalizado el{" "}
-                        {new Date(
-                          event.endDate || event.startDate,
-                        ).toLocaleDateString()}
+                        {formatDate(event.endDate || event.startDate)}
                       </p>
                     </div>
                   </div>
                 </Card>
               ))}
 
-            {/* Empty State para Historial */}
             {historyItems.length === 0 && (
               <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground border-2 border-dashed border-muted rounded-xl bg-muted/5">
                 <div className="h-12 w-12 bg-muted rounded-full flex items-center justify-center mb-3">
